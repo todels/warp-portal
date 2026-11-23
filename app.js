@@ -1,4 +1,4 @@
-import { createPortal } from './portal.js?v=3';
+import { createPortal } from './portal.js?v=4';
 import { Muxer, ArrayBufferTarget } from './vendor/mp4-muxer.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -8,6 +8,7 @@ const canvas = $('view');
 const portal = createPortal(canvas, {}, { maxDpr: 2, pauseOffscreen: false });
 const DEF = portal.params;
 const STORE = 'warp-portal.v3';
+const LIGHT_KEYS = ['exposure', 'contrast', 'blackPoint', 'highlights', 'glowAmount', 'glowSize', 'bloom', 'bloomSize'];
 const OUT_DEF = { w: 1920, h: 1080, fps: 60, dur: 12, loop: false, quality: 'high' };
 let out = { ...OUT_DEF };
 
@@ -86,12 +87,118 @@ function slider(parent, key, label, min, max, step, opts = {}) {
   return row;
 }
 function colorWell(parent, get, set, title) {
-  const w = el('div', 'well'); w.title = title;
-  const inp = document.createElement('input'); inp.type = 'color';
-  inp.addEventListener('input', () => { set(inp.value); w.style.background = inp.value; save(); markPreset(portal.params); });
-  syncers.push((p) => { const v = get(p); inp.value = v; w.style.background = v; });
-  w.append(inp); parent.append(w); return w;
+  const w = el('button', 'well'); w.title = title;
+  const apply = (v) => { set(v); w.style.background = v; save(); markPreset(portal.params); };
+  w.addEventListener('click', (e) => { e.stopPropagation(); picker.open(w, get(portal.params), apply, title); });
+  syncers.push((p) => { w.style.background = get(p); });
+  parent.append(w); return w;
 }
+
+// ---------- colour picker (replaces the native one) ----------
+const picker = (() => {
+  const QUICK = ['#ffffff', '#ff38cd', '#ff81a5', '#ff3d00', '#ff9a1a', '#ffe14d', '#c6ff00', '#00ffa3', '#00e5ff', '#1a55ff', '#6f3fff', '#a64dff', '#eda3ff', '#7737bb', '#00003b', '#000000'];
+  const pop = el('div', 'cpick'); pop.hidden = true;
+  pop.innerHTML = `
+    <div class="cp-sv"><div class="cp-knob"></div></div>
+    <div class="cp-hue"><div class="cp-hknob"></div></div>
+    <div class="cp-row"><div class="cp-cmp"><i class="cp-old" title="Back to the colour you started with"></i><i class="cp-new"></i></div>
+      <input class="cp-hex" spellcheck="false" maxlength="7"><button class="cp-drop" title="Pick a colour from the screen"><svg class="i" viewBox="0 0 16 16"><path d="M10.5 2.5l3 3M12 4l-7.5 7.5-2 .5.5-2L10.5 2.5M8.5 4.5l3 3"/></svg></button></div>
+    <div class="cp-lbl">In use</div><div class="cp-sw cp-used"></div>
+    <div class="cp-lbl">Quick</div><div class="cp-sw cp-quick"></div>`;
+  document.body.append(pop);
+  const q = (c) => pop.querySelector(c);
+  const sv = q('.cp-sv'), knob = q('.cp-knob'), hue = q('.cp-hue'), hk = q('.cp-hknob'), hex = q('.cp-hex');
+  const oldI = q('.cp-old'), newI = q('.cp-new'), used = q('.cp-used'), quick = q('.cp-quick'), drop = q('.cp-drop');
+  if (!window.EyeDropper) drop.hidden = true;
+  let H = 0, S = 0, V = 0, onSet = null, start = '#000000', anchor = null;
+
+  const toHex = (h, s, v) => {
+    const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return '#' + [f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+  };
+  const fromHex = (x) => {
+    const n = parseInt(x.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h * 60, mx ? d / mx : 0, mx];
+  };
+  const norm = (x) => {
+    x = String(x).trim().replace(/^#?/, '#').toLowerCase();
+    if (/^#[0-9a-f]{3}$/.test(x)) x = '#' + x.slice(1).split('').map((c) => c + c).join('');
+    return /^#[0-9a-f]{6}$/.test(x) ? x : null;
+  };
+  function paint(skipHex) {
+    const c = toHex(H, S, V);
+    sv.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${toHex(H, 1, 1)})`;
+    knob.style.left = S * 100 + '%'; knob.style.top = (1 - V) * 100 + '%'; knob.style.background = c;
+    hk.style.left = H / 360 * 100 + '%'; hk.style.background = toHex(H, 1, 1);
+    newI.style.background = c;
+    if (!skipHex) hex.value = c;
+    return c;
+  }
+  function commit(skipHex) { const c = paint(skipHex); if (onSet) onSet(c); paintUsed(); }
+  function setHex(x, skipHex) {
+    const c = norm(x); if (!c) return;
+    const [h, s, v] = fromHex(c);
+    if (s > 0 && v > 0) H = h; S = s; V = v;
+    commit(skipHex);
+  }
+  function chip(parent, c) {
+    const b = el('button'); b.style.background = c; b.title = c;
+    b.addEventListener('click', () => setHex(c)); parent.append(b);
+  }
+  function paintUsed() {
+    used.innerHTML = '';
+    const p = portal.params;
+    [...new Set([...p.colors, p.background, p.glow])].forEach((c) => chip(used, c));
+  }
+  QUICK.forEach((c) => chip(quick, c));
+
+  function drag(area, fn) {
+    area.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); area.setPointerCapture(e.pointerId);
+      const move = (ev) => { const r = area.getBoundingClientRect(); fn(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height))); commit(); };
+      move(e);
+      const up = () => { area.removeEventListener('pointermove', move); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); };
+      area.addEventListener('pointermove', move); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+    });
+  }
+  drag(sv, (x, y) => { S = x; V = 1 - y; });
+  drag(hue, (x) => { H = Math.min(359.9, x * 360); });
+  hex.addEventListener('input', () => setHex(hex.value, true));
+  hex.addEventListener('blur', () => paint());
+  hex.addEventListener('keydown', (e) => { if (e.key === 'Enter') { setHex(hex.value); close(); } });
+  oldI.addEventListener('click', () => setHex(start));
+  drop.addEventListener('click', async () => {
+    try { const r = await new EyeDropper().open(); setHex(r.sRGBHex); } catch (e) { /* cancelled */ }
+  });
+
+  function place() {
+    const r = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let x = r.left + r.width / 2 - pw / 2, y = r.bottom + 8;
+    if (y + ph > innerHeight - 8) y = Math.max(8, r.top - ph - 8);
+    x = Math.min(innerWidth - pw - 8, Math.max(8, x));
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  }
+  function open(a, value, set, title) {
+    if (!pop.hidden && anchor === a) return close();
+    anchor = a; onSet = set; start = norm(value) || '#000000';
+    document.querySelectorAll('.well.open').forEach((b) => b.classList.remove('open'));
+    a.classList.add('open');
+    oldI.style.background = start;
+    const [h, s, v] = fromHex(start); H = h; S = s; V = v;
+    paint(); paintUsed();
+    pop.hidden = false; place();
+  }
+  function close() { pop.hidden = true; if (anchor) anchor.classList.remove('open'); anchor = null; onSet = null; }
+  document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target) && e.target !== anchor) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); close(); } }, true);
+  addEventListener('resize', () => { if (!pop.hidden) place(); });
+  document.addEventListener('scroll', () => { if (!pop.hidden) place(); }, true);
+  return { open, close };
+})();
+
 function seg(parent, items, get, set) {
   const s = el('div', 'seg');
   const bs = items.map(([v, label]) => {
@@ -157,8 +264,21 @@ function markPreset(p) {
   const sp = el('div'); sp.style.height = '8px'; s.append(sp);
   slider(s, 'hue', 'Hue shift', -180, 180, 1, { show: (v) => Math.round(v) + '°', after: () => markPreset(portal.params) });
   slider(s, 'saturation', 'Saturation', 0, 2, 0.01);
+}
+
+// Light
+{
+  const s = section('Light', iconBtn(ICON_RESET, 'Reset light to default', () => {
+    const patch = {}; LIGHT_KEYS.forEach((k) => { patch[k] = DEF[k]; }); portal.set(patch); changed();
+  }));
   slider(s, 'exposure', 'Brightness', 0.2, 3, 0.01);
-  slider(s, 'glowSize', 'Glow size', 0.1, 3, 0.01);
+  slider(s, 'contrast', 'Contrast', 0.3, 2.5, 0.01);
+  slider(s, 'blackPoint', 'Darks', -0.3, 0.4, 0.005, { show: (v) => (v > 0 ? '+' : '') + Math.round(v * 100) });
+  slider(s, 'highlights', 'Hot white', 0, 1, 0.01);
+  slider(s, 'bloom', 'Glow', 0, 2, 0.01);
+  slider(s, 'bloomSize', 'Glow size', 0.2, 4, 0.01);
+  slider(s, 'glowAmount', 'Center glow', 0, 6, 0.01);
+  slider(s, 'glowSize', 'Center size', 0.1, 6, 0.01);
 }
 
 // Motion

@@ -120,7 +120,47 @@
     position: relative; width: 30px; height: 30px; border-radius: 8px; flex: none; overflow: hidden;
     box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); cursor: pointer;
   }
-  .well input { position: absolute; inset: -4px; opacity: 0; width: calc(100% + 8px); height: calc(100% + 8px); cursor: pointer; border: 0; padding: 0; }
+  button.well { border: 0; padding: 0; }
+  .well.open { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--text); }
+
+  .cpick {
+    position: fixed; z-index: 50; width: 244px; padding: 12px; border-radius: 12px;
+    background: var(--panel-2); border: 1px solid var(--line-2); box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  .cpick[hidden] { display: none; }
+  .cp-sv { position: relative; height: 150px; border-radius: 8px; cursor: crosshair; touch-action: none; }
+  .cp-knob, .cp-hknob {
+    position: absolute; width: 16px; height: 16px; border-radius: 50%; transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,.6); pointer-events: none;
+  }
+  .cp-hue {
+    position: relative; height: 12px; margin: 12px 0; border-radius: 6px; cursor: pointer; touch-action: none;
+    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  }
+  .cp-hknob { top: 50%; }
+  .cp-row { display: flex; gap: 6px; align-items: center; }
+  .cp-cmp { display: flex; flex: none; width: 44px; height: 28px; border-radius: 7px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  .cp-cmp i { flex: 1; }
+  .cp-old { cursor: pointer; }
+  .cp-hex {
+    flex: 1; min-width: 0; height: 28px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line-2);
+    background: var(--panel); color: var(--text); font: 12px var(--mono); text-transform: lowercase; outline: none;
+  }
+  .cp-hex:focus { border-color: var(--faint); }
+  .cp-drop {
+    flex: none; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel);
+    color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0;
+  }
+  .cp-drop:hover { color: var(--text); background: var(--hover); }
+  .cp-drop[hidden] { display: none; }
+  .cp-drop svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .cp-lbl { margin: 10px 0 5px; font-size: 10.5px; color: var(--faint); }
+  .cp-sw { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+  .cp-sw button {
+    aspect-ratio: 1; border: 0; padding: 0; border-radius: 5px; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+  }
+  .cp-sw button:hover { box-shadow: 0 0 0 1.5px var(--text); }
   .swatches .lbl { font-size: 11px; color: var(--faint); width: 30px; text-align: center; }
   .swrow { display: grid; grid-template-columns: repeat(7, 30px); gap: 6px; justify-content: space-between; }
   .swrow .cap { font-size: 10.5px; color: var(--faint); text-align: center; margin-top: 3px; }
@@ -208,6 +248,6 @@
   <button class="btn small" id="mCancel">Cancel</button>
 </div></div>
 
-<script type="module" src="app.js?v=3"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>
