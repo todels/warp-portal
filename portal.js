@@ -18,7 +18,7 @@ export function createPortal(canvas, params, options) {
     speed: 1, rotation: 0.01, twist: 0, pulse: 0, shimmer: 0,
     density: 1, width: 1, length: 1, softness: 1, fade: 1, core: 0, variety: 0.05,
     centerX: REF.centerX, centerY: REF.centerY, seed: 1, grain: 0.2, vignette: 0, loop: 0,
-    contrast: 1, blackPoint: 0, highlights: 1, glowAmount: 1, bloom: 0, bloomSize: 1
+    contrast: 1, blackPoint: 0, highlights: 1, glowAmount: 1, bloom: 0, bloomSize: 1, haze: 1
   };
   options = options || {};
   var P = Object.assign({}, DEFAULTS, params || {});
@@ -239,7 +239,7 @@ export function createPortal(canvas, params, options) {
       n++;
     }
     // ambient glow wedges: fixed in place (they still turn with Spin in the shader)
-    for (var i = 0; i < AMB.length; i++) put(AMB[i], AMB[i].th + rot0, AMB[i].ua, 1, i, true);
+    for (var i = 0; i < AMB.length; i++) put(AMB[i], AMB[i].th + rot0, AMB[i].ua, Math.max(0, P.haze), i, true);
     var total = Math.round(NL * Math.max(1, dens));
     for (var s = 0; s < total; s++) {
       if (s < NL && dens < 1 && hash(s, 31, seed) > dens) continue;

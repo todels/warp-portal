@@ -1,4 +1,4 @@
-import { createPortal } from './portal.js?v=4';
+import { createPortal } from './portal.js?v=5';
 import { Muxer, ArrayBufferTarget } from './vendor/mp4-muxer.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -8,7 +8,7 @@ const canvas = $('view');
 const portal = createPortal(canvas, {}, { maxDpr: 2, pauseOffscreen: false });
 const DEF = portal.params;
 const STORE = 'warp-portal.v3';
-const LIGHT_KEYS = ['exposure', 'contrast', 'blackPoint', 'highlights', 'glowAmount', 'glowSize', 'bloom', 'bloomSize'];
+const LIGHT_KEYS = ['exposure', 'contrast', 'blackPoint', 'highlights', 'glowAmount', 'glowSize', 'bloom', 'bloomSize', 'haze'];
 const OUT_DEF = { w: 1920, h: 1080, fps: 60, dur: 12, loop: false, quality: 'high' };
 let out = { ...OUT_DEF };
 
@@ -275,6 +275,7 @@ function markPreset(p) {
   slider(s, 'contrast', 'Contrast', 0.3, 2.5, 0.01);
   slider(s, 'blackPoint', 'Darks', -0.3, 0.4, 0.005, { show: (v) => (v > 0 ? '+' : '') + Math.round(v * 100) });
   slider(s, 'highlights', 'Hot white', 0, 1, 0.01);
+  slider(s, 'haze', 'Haze', 0, 3, 0.01);
   slider(s, 'bloom', 'Glow', 0, 2, 0.01);
   slider(s, 'bloomSize', 'Glow size', 0.2, 4, 0.01);
   slider(s, 'glowAmount', 'Center glow', 0, 6, 0.01);
