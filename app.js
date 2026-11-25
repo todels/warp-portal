@@ -1,4 +1,4 @@
-import { createPortal } from './portal.js?v=5';
+import { createPortal } from './portal.js?v=6';
 import { Muxer, ArrayBufferTarget } from './vendor/mp4-muxer.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -22,9 +22,10 @@ const PRESETS = [
   { name: 'Ember', p: { colors: ['#ff3d00', '#b0122e', '#ff7a1a', '#ffd9a8', '#ffb36b'], background: '#170309', glow: '#7a1a24' } },
   { name: 'Sunset', p: { colors: ['#a64dff', '#6a3dff', '#ff5e7e', '#ffc2a1', '#ff9a5a'], background: '#1a0a33', glow: '#7a2a6a' } },
   { name: 'Acid', p: { colors: ['#00ffd5', '#7a5cff', '#ff00e5', '#f4ff8a', '#c6ff00'], background: '#06060f', glow: '#2a1450' } },
+  { name: 'Daylight', p: { light: 1, colors: ['#3d7bff', '#6a7dff', '#ff4fae', '#ffb98a', '#ff7a1a'], background: '#ffffff', glow: '#ffffff' } },
   { name: 'Mono', p: { colors: ['#bfc6ff', '#7f88ff', '#ffffff', '#e6e9ff', '#9aa3c8'], background: '#03040a', glow: '#1a1d3a', saturation: 1 } },
 ];
-const COLOR_KEYS = ['colors', 'background', 'glow', 'hue', 'saturation'];
+const COLOR_KEYS = ['colors', 'background', 'glow', 'hue', 'saturation', 'light'];
 
 // ---------- persistence ----------
 function sanitize(p) {
@@ -250,6 +251,8 @@ function markPreset(p) {
 // Colours
 {
   const s = section('Color');
+  seg(s, [[0, 'Dark'], [1, 'Light']], () => portal.params.light ? 1 : 0, (v) => { portal.set({ light: v }); changed(); });
+  { const sp0 = el('div'); sp0.style.height = '10px'; s.append(sp0); }
   const grid = el('div', 'swrow');
   const caps = el('div', 'swrow');
   for (let i = 0; i < 5; i++) {

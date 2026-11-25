@@ -18,7 +18,7 @@ export function createPortal(canvas, params, options) {
     speed: 1, rotation: 0.01, twist: 0, pulse: 0, shimmer: 0,
     density: 1, width: 1, length: 1, softness: 1, fade: 1, core: 0, variety: 0.05,
     centerX: REF.centerX, centerY: REF.centerY, seed: 1, grain: 0.2, vignette: 0, loop: 0,
-    contrast: 1, blackPoint: 0, highlights: 1, glowAmount: 1, bloom: 0, bloomSize: 1, haze: 1
+    contrast: 1, blackPoint: 0, highlights: 1, glowAmount: 1, bloom: 0, bloomSize: 1, haze: 1, light: 0
   };
   options = options || {};
   var P = Object.assign({}, DEFAULTS, params || {});
@@ -34,7 +34,7 @@ export function createPortal(canvas, params, options) {
     'uniform vec2 uRes, uCenter;',
     'uniform float uRot, uZoom, uTwist, uFrame, uKap, uB0, uHole, uShimmer;',
     'uniform float uExposure, uSat, uGrain, uVignette, uGlowS;',
-    'uniform float uContrast, uBlack, uHot, uBloom, uBloomW;',
+    'uniform float uContrast, uBlack, uHot, uBloom, uBloomW, uLight, uGlowA;',
     'uniform vec3 uBg, uGlow;',
     'uniform int uCount;',
     'uniform sampler2D uData;',
@@ -58,7 +58,7 @@ export function createPortal(canvas, params, options) {
     '  float kr2 = uKap * uKap * r * r;',
     '  float b0 = max(uB0, 0.8 / m) / r;',
     '  float aa2 = b0 * b0;',
-    '  vec3 acc = vec3(0.0), accB = vec3(0.0);',
+    '  vec4 acc = vec4(0.0), accB = vec4(0.0);',
     // bloom: the same streaks again with a much wider angular spread (fixed size on screen, capped near the center)
     '  float bw = min(1.2, uBloomW / r);',
     '  float bw2 = uBloom > 0.0 ? bw * bw : 0.0;',
@@ -75,19 +75,28 @@ export function createPortal(canvas, params, options) {
     '    vec4 b = texelFetch(uData, ivec2(i, 1), 0);',
     '    e *= 1.0 - smoothstep(b.x - b.y, b.x + b.y, u);',
     '    if (uShimmer > 0.0) e *= max(0.0, 1.0 + uShimmer * 0.6 * sin(u * 9.0 - b.z));',
-    '    vec3 c = texelFetch(uData, ivec2(i, 2), 0).rgb;',
+    '    vec4 c = texelFetch(uData, ivec2(i, 2), 0);',
     '    acc += c * (exp(-0.5 * q) * a.y * inversesqrt(se2) * e);',
     '    if (bw2 > 0.0) accB += c * (exp(-0.5 * qb) * a.y * inversesqrt(sb2) * e);',
     '  }',
     '  if (uHole > 0.0) { float hm = smoothstep(0.15 * uHole, uHole, r); acc *= hm; accB *= hm; }',
     // additive light over a dark base, per-channel film curve: hot overlaps go white, edges stay saturated
-    '  vec3 lin = uBg + uGlow * exp(-r * r / (2.0 * uGlowS * uGlowS)) + (acc + accB * uBloom) * uExposure;',
-    '  vec3 col = 1.0 - exp(-lin);',
+    '  vec3 col;',
+    '  float gg = exp(-r * r / (2.0 * uGlowS * uGlowS));',
+    '  if (uLight > 0.5) {',
+    // light mode: rays are paint on the background, each in its own colour; coverage builds up instead of light adding to white
+    '    vec4 t = (acc + accB * uBloom) * uExposure + vec4(uGlow, 1.0) * (gg * uGlowA * 0.6);',
+    '    vec3 avg = t.rgb / max(t.a, 1e-5);',
+    '    col = mix(uBg, avg, 1.0 - exp(-2.2 * t.a));',
+    '  } else {',
+    '  vec3 lin = uBg + uGlow * gg + (acc.rgb + accB.rgb * uBloom) * uExposure;',
+    '  col = 1.0 - exp(-lin);',
     // highlights: 1 = per-channel curve (overlaps burn to white), 0 = hue-preserving curve (overlaps stay coloured)
     '  if (uHot != 1.0) {',
     '    float L = max(dot(lin, vec3(0.2126, 0.7152, 0.0722)), 1e-6);',
     '    vec3 keep = min(lin * ((1.0 - exp(-L)) / L), vec3(1.0));',
     '    col = clamp(mix(keep, col, uHot), 0.0, 1.0);',
+    '  }',
     '  }',
     '  float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));',
     '  col = clamp(mix(vec3(lum), col, uSat), 0.0, 1.0);',
@@ -125,7 +134,7 @@ export function createPortal(canvas, params, options) {
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
   var U = {};
   ['uRes', 'uCenter', 'uRot', 'uZoom', 'uTwist', 'uFrame', 'uKap', 'uB0', 'uHole', 'uShimmer', 'uExposure', 'uSat',
-    'uGrain', 'uVignette', 'uGlowS', 'uContrast', 'uBlack', 'uHot', 'uBloom', 'uBloomW', 'uBg', 'uGlow', 'uCount', 'uData'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+    'uGrain', 'uVignette', 'uGlowS', 'uContrast', 'uBlack', 'uHot', 'uBloom', 'uBloomW', 'uLight', 'uGlowA', 'uBg', 'uGlow', 'uCount', 'uData'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
   var tex = gl.createTexture();
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -234,8 +243,9 @@ export function createPortal(canvas, params, options) {
       } else ub = ua + a.lu * P.length;
       data[o1] = Math.max(ub, ua + 0.05); data[o1 + 1] = a.hb; data[o1 + 2] = sh; data[o1 + 3] = 0;
       var cr = 0, cg = 0, cb = 0;
-      for (var j = 0; j < 5; j++) { var w = a.w[j]; if (w) { cr += w * pal[j][0]; cg += w * pal[j][1]; cb += w * pal[j][2]; } }
-      data[o2] = cr * vis; data[o2 + 1] = cg * vis; data[o2 + 2] = cb * vis; data[o2 + 3] = 0;
+      var ca = 0;
+      for (var j = 0; j < 5; j++) { var w = a.w[j]; if (w) { cr += w * pal[j][0]; cg += w * pal[j][1]; cb += w * pal[j][2]; ca += w; } }
+      data[o2] = cr * vis; data[o2 + 1] = cg * vis; data[o2 + 2] = cb * vis; data[o2 + 3] = ca * vis;
       n++;
     }
     // ambient glow wedges: fixed in place (they still turn with Spin in the shader)
@@ -289,11 +299,13 @@ export function createPortal(canvas, params, options) {
     gl.uniform3fv(U.uBg, lin(P.background));
     var gw = lin(P.glow);
     var gk = REF.glowK * Math.max(0, P.glowAmount);
-    gl.uniform3f(U.uGlow, gw[0] * gk, gw[1] * gk, gw[2] * gk);
+    if (P.light) gl.uniform3f(U.uGlow, gw[0], gw[1], gw[2]); else gl.uniform3f(U.uGlow, gw[0] * gk, gw[1] * gk, gw[2] * gk);
+    gl.uniform1f(U.uGlowA, gk);
     gl.uniform1f(U.uContrast, P.contrast);
     gl.uniform1f(U.uBlack, Math.min(0.9, P.blackPoint));
     gl.uniform1f(U.uHot, P.highlights);
     gl.uniform1f(U.uBloom, P.bloom * 0.5);
+    gl.uniform1f(U.uLight, P.light ? 1 : 0);
     gl.uniform1f(U.uBloomW, 0.035 * Math.max(0.05, P.bloomSize));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
